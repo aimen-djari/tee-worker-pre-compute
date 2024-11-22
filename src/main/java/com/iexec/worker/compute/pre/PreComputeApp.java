@@ -25,6 +25,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.io.File;
 import java.security.GeneralSecurityException;
+import java.util.List;
 
 @Slf4j
 public class PreComputeApp {
@@ -46,9 +47,15 @@ public class PreComputeApp {
         preComputeArgs = PreComputeArgs.readArgs(chainTaskId);
         checkOutputFolder();
         if (preComputeArgs.isDatasetRequired()) {
-            byte[] encryptedContent = downloadEncryptedDataset();
-            byte[] plainContent = decryptDataset(encryptedContent);
-            savePlainDatasetFile(plainContent);
+            List<String> encryptedDatasetUrls = getPreComputeArgs().getEncryptedDatasetUrls();
+            List<String> expectedChecksums = getPreComputeArgs().getEncryptedDatasetChecksums();
+            List<String> keys = getPreComputeArgs().getEncryptedDatasetBase64Keys();
+            List<String> filenames = getPreComputeArgs().getPlainDatasetFilenames();
+            for (int i=0; i < encryptedDatasetUrls.size(); i++){
+                byte[] encryptedContent = downloadEncryptedDataset(encryptedDatasetUrls.get(i), expectedChecksums.get(i));
+                byte[] plainContent = decryptDataset(encryptedContent, keys.get(i));
+                savePlainDatasetFile(plainContent, filenames.get(i));
+            }
         }
         downloadInputFiles();
     }
@@ -76,8 +83,7 @@ public class PreComputeApp {
      * @return downloaded file bytes
      * @throws PreComputeException if download fails or bad file checksum
      */
-    byte[] downloadEncryptedDataset() throws PreComputeException {
-        String encryptedDatasetUrl = getPreComputeArgs().getEncryptedDatasetUrl();
+    byte[] downloadEncryptedDataset(String encryptedDatasetUrl, String expectedChecksum) throws PreComputeException {
         log.info("Downloading encrypted dataset file [chainTaskId:{}, url:{}]",
                 chainTaskId, encryptedDatasetUrl);
         byte[] encryptedContent = null;
@@ -98,7 +104,6 @@ public class PreComputeApp {
             throw new PreComputeException(ReplicateStatusCause.PRE_COMPUTE_DATASET_DOWNLOAD_FAILED);
         }
         log.info("Checking encrypted dataset checksum [chainTaskId:{}]", chainTaskId);
-        String expectedChecksum = getPreComputeArgs().getEncryptedDatasetChecksum();
         String actualChecksum = HashUtils.sha256(encryptedContent);
         if (!actualChecksum.equals(expectedChecksum)) {
             log.info("Invalid dataset checksum [chainTaskId:{}, expected:{}, actual:{}]",
@@ -115,9 +120,8 @@ public class PreComputeApp {
      * @return plain dataset content bytes
      * @throws PreComputeException if decryption fails
      */
-    byte[] decryptDataset(byte[] encryptedContent) throws PreComputeException {
+    byte[] decryptDataset(byte[] encryptedContent, String key) throws PreComputeException {
         log.info("Decrypting dataset [chainTaskId:{}]", chainTaskId);
-        String key = getPreComputeArgs().getEncryptedDatasetBase64Key();
         try {
             byte[] plainDatasetContent = CipherUtils.aesDecrypt(encryptedContent, key.getBytes());
             log.info("Decrypted dataset [chainTaskId:{}]", chainTaskId);
@@ -136,9 +140,9 @@ public class PreComputeApp {
      * @param plainContent bytes
      * @throws PreComputeException if saving the file fails
      */
-    void savePlainDatasetFile(byte[] plainContent) throws PreComputeException {
+    void savePlainDatasetFile(byte[] plainContent, String filename) throws PreComputeException {
         String plainDatasetFilepath = getPreComputeArgs().getOutputDir() + File.separator +
-                getPreComputeArgs().getPlainDatasetFilename();
+                filename;
         log.info("Saving plain dataset file [chainTaskId:{}, path:{}]",
                 chainTaskId, plainDatasetFilepath);
         if (!FileHelper.writeFile(plainDatasetFilepath, plainContent)) {

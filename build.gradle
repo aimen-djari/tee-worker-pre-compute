@@ -30,7 +30,7 @@ if (!project.hasProperty('gitBranch')) {
 }
 
 if (gitBranch != 'main' && gitBranch != 'master' && !(gitBranch ==~ '(release|hotfix|support)/.*')) {
-    version += '-NEXT-SNAPSHOT'
+    //version += '-NEXT-SNAPSHOT'
 }
 
 repositories {
@@ -51,8 +51,11 @@ repositories {
 
 dependencies {
     // iexec
-    implementation "com.iexec.commons:iexec-commons-poco:$iexecCommonsPocoVersion"
-    implementation "com.iexec.common:iexec-common:$iexecCommonVersion"
+    implementation files('iexec-commons-poco/iexec-commons-poco-3.2.0-all.jar')
+    implementation files('iexec-common/iexec-common-8.3.1-all.jar')
+    
+    //implementation "com.iexec.commons:iexec-commons-poco:$iexecCommonsPocoVersion"
+    //implementation "com.iexec.common:iexec-common:$iexecCommonVersion"
 
     // apache commons.lang3
     implementation 'org.apache.commons:commons-lang3:3.12.0'

@@ -81,10 +81,11 @@ class PreComputeAppTests {
                  IEXEC_TASK_ID, CHAIN_TASK_ID,
                  IEXEC_PRE_COMPUTE_OUT, outputDir.getAbsolutePath(),
                  IS_DATASET_REQUIRED, true,
-                 IEXEC_DATASET_URL, HTTP_DATASET_URL,
-                 IEXEC_DATASET_KEY, FileHelper.readFile(KEY_FILE),
-                 IEXEC_DATASET_CHECKSUM, DATASET_CHECKSUM,
-                 IEXEC_DATASET_FILENAME, DATASET_FILENAME,
+                 IEXEC_DATASET_NUMBER, "1",
+                 IEXEC_DATASET_URL_PREFIX + 1, HTTP_DATASET_URL,
+                 IEXEC_DATASET_KEY_PREFIX + 1, FileHelper.readFile(KEY_FILE),
+                 IEXEC_DATASET_CHECKSUM_PREFIX + 1, DATASET_CHECKSUM,
+                 IEXEC_DATASET_FILENAME_PREFIX + 1, DATASET_FILENAME,
                  IEXEC_INPUT_FILES_NUMBER, 2,
                  IEXEC_INPUT_FILE_URL_PREFIX + "1", INPUT_FILE_1_URL,
                  IEXEC_INPUT_FILE_URL_PREFIX + "2", INPUT_FILE_2_URL
@@ -94,9 +95,9 @@ class PreComputeAppTests {
          final byte[] plainContent = "plainContent".getBytes();
 
          doNothing().when(preComputeApp).checkOutputFolder();
-         doReturn(encryptedDataset).when(preComputeApp).downloadEncryptedDataset();
-         doReturn(plainContent).when(preComputeApp).decryptDataset(encryptedDataset);
-         doNothing().when(preComputeApp).savePlainDatasetFile(plainContent);
+         doReturn(encryptedDataset).when(preComputeApp).downloadEncryptedDataset(HTTP_DATASET_URL, DATASET_CHECKSUM);
+         doReturn(plainContent).when(preComputeApp).decryptDataset(encryptedDataset, FileHelper.readFile(KEY_FILE));
+         doNothing().when(preComputeApp).savePlainDatasetFile(plainContent, DATASET_FILENAME);
          doNothing().when(preComputeApp).downloadInputFiles();
 
          assertDoesNotThrow(() -> preComputeApp.run());
@@ -117,10 +118,9 @@ class PreComputeAppTests {
          doNothing().when(preComputeApp).downloadInputFiles();
 
          assertDoesNotThrow(() -> preComputeApp.run());
-
-         verify(preComputeApp, never()).downloadEncryptedDataset();
-         verify(preComputeApp, never()).decryptDataset(any());
-         verify(preComputeApp, never()).savePlainDatasetFile(any());
+         verify(preComputeApp, never()).downloadEncryptedDataset(any(), any());
+         verify(preComputeApp, never()).decryptDataset(any(), any());
+         verify(preComputeApp, never()).savePlainDatasetFile(any(), any());
      }
      //endregion
 
@@ -147,7 +147,7 @@ class PreComputeAppTests {
     void shouldDownloadEncryptedDataset() throws Exception {
         final PreComputeArgs preComputeArgs = getPreComputeArgsBuilder(HTTP_DATASET_URL).build();
         doReturn(preComputeArgs).when(preComputeApp).getPreComputeArgs();
-        byte[] actualContent = preComputeApp.downloadEncryptedDataset();
+        byte[] actualContent = preComputeApp.downloadEncryptedDataset(preComputeArgs.getEncryptedDatasetUrls().get(0), preComputeArgs.getEncryptedDatasetChecksums().get(0));
         byte[] expectedContent = FileHelper.readFileBytesFromUrl(HTTP_DATASET_URL);
         assertThat(actualContent).isEqualTo(expectedContent);
     }
@@ -155,12 +155,12 @@ class PreComputeAppTests {
     @Test
     void shouldThrowSinceDownloadFailed() {
         final PreComputeArgs preComputeArgs = getPreComputeArgsBuilder(HTTP_DATASET_URL)
-                .encryptedDatasetUrl("http://bad-url")
+                .encryptedDatasetUrls(List.of("http://bad-url"))
                 .build();
         doReturn(preComputeArgs).when(preComputeApp).getPreComputeArgs();
         PreComputeException e = assertThrows(
                 PreComputeException.class,
-                () -> preComputeApp.downloadEncryptedDataset());
+                () -> preComputeApp.downloadEncryptedDataset(preComputeArgs.getEncryptedDatasetUrls().get(0), preComputeArgs.getEncryptedDatasetChecksums().get(0)));
         assertThat(e.getExitCause()).isEqualTo(ReplicateStatusCause.PRE_COMPUTE_DATASET_DOWNLOAD_FAILED);
     }
 
@@ -174,7 +174,7 @@ class PreComputeAppTests {
         try (MockedStatic<FileHelper> fileHelperMock = mockStatic(FileHelper.class)) {
             fileHelperMock.when(() -> FileHelper.readFileBytesFromUrl(anyString()))
                     .thenReturn(expectedBytes);
-            assertThat(preComputeApp.downloadEncryptedDataset()).isNotNull();
+            assertThat(preComputeApp.downloadEncryptedDataset(preComputeArgs.getEncryptedDatasetUrls().get(0), preComputeArgs.getEncryptedDatasetChecksums().get(0))).isNotNull();
             fileHelperMock.verify(() -> FileHelper.readFileBytesFromUrl(anyString()), times(1));
         }
     }
@@ -190,7 +190,7 @@ class PreComputeAppTests {
             fileHelperMock.when(() -> FileHelper.readFileBytesFromUrl(anyString()))
                     .thenReturn(null)
                     .thenReturn(expectedBytes);
-            assertThat(preComputeApp.downloadEncryptedDataset()).isNotNull();
+            assertThat(preComputeApp.downloadEncryptedDataset(preComputeArgs.getEncryptedDatasetUrls().get(0), preComputeArgs.getEncryptedDatasetChecksums().get(0))).isNotNull();
             fileHelperMock.verify(() -> FileHelper.readFileBytesFromUrl(anyString()), times(2));
         }
     }
@@ -207,7 +207,7 @@ class PreComputeAppTests {
                     .thenReturn(null)
                     .thenReturn(null)
                     .thenReturn(expectedBytes);
-            assertThat(preComputeApp.downloadEncryptedDataset()).isNotNull();
+            assertThat(preComputeApp.downloadEncryptedDataset(preComputeArgs.getEncryptedDatasetUrls().get(0), preComputeArgs.getEncryptedDatasetChecksums().get(0))).isNotNull();
             fileHelperMock.verify(() -> FileHelper.readFileBytesFromUrl(anyString()), times(3));
         }
     }
@@ -223,7 +223,7 @@ class PreComputeAppTests {
                     .thenReturn(null);
             assertThrows(
                     PreComputeException.class,
-                    () -> preComputeApp.downloadEncryptedDataset()
+                    () -> preComputeApp.downloadEncryptedDataset(preComputeArgs.getEncryptedDatasetUrls().get(0), preComputeArgs.getEncryptedDatasetChecksums().get(0))
             );
             fileHelperMock.verify(() -> FileHelper.readFileBytesFromUrl(anyString()), times(3));
         }
@@ -232,12 +232,12 @@ class PreComputeAppTests {
     @Test
     void shouldThrowSinceDatasetChecksumNotValid() {
         final PreComputeArgs preComputeArgs = getPreComputeArgsBuilder(HTTP_DATASET_URL)
-                .encryptedDatasetChecksum("badChecksum")
+                .encryptedDatasetChecksums(List.of("badChecksum"))
                 .build();
         doReturn(preComputeArgs).when(preComputeApp).getPreComputeArgs();
         PreComputeException e = assertThrows(
                 PreComputeException.class,
-                () -> preComputeApp.downloadEncryptedDataset());
+                () -> preComputeApp.downloadEncryptedDataset(preComputeArgs.getEncryptedDatasetUrls().get(0), preComputeArgs.getEncryptedDatasetChecksums().get(0)));
         assertThat(e.getExitCause()).isEqualTo(ReplicateStatusCause.PRE_COMPUTE_INVALID_DATASET_CHECKSUM);
     }
 
@@ -247,7 +247,7 @@ class PreComputeAppTests {
         doReturn(preComputeArgs).when(preComputeApp).getPreComputeArgs();
         byte[] encryptedData = FileHelper.readFileBytesFromUrl(HTTP_DATASET_URL);
         byte[] expectedPlainData = FileHelper.readAllBytes(PLAIN_DATA_FILE);
-        byte[] actualPlainData = preComputeApp.decryptDataset(encryptedData);
+        byte[] actualPlainData = preComputeApp.decryptDataset(encryptedData, preComputeArgs.getEncryptedDatasetBase64Keys().get(0));
         assertThat(actualPlainData).isEqualTo(expectedPlainData);
     }
 
@@ -255,13 +255,13 @@ class PreComputeAppTests {
     void shouldThrowSinceDecryptionFailed() {
         String badKey = FileHelper.readFile(KEY_FILE).replace("A", "B");
         final PreComputeArgs preComputeArgs = getPreComputeArgsBuilder(HTTP_DATASET_URL)
-                .encryptedDatasetBase64Key(badKey)
+                .encryptedDatasetBase64Keys(List.of(badKey))
                 .build();
         byte[] encryptedData = FileHelper.readFileBytesFromUrl(HTTP_DATASET_URL);
         doReturn(preComputeArgs).when(preComputeApp).getPreComputeArgs();
         PreComputeException e = assertThrows(
                 PreComputeException.class,
-                () -> preComputeApp.decryptDataset(encryptedData));
+                () -> preComputeApp.decryptDataset(encryptedData, preComputeArgs.getEncryptedDatasetBase64Keys().get(0)));
         assertThat(e.getExitCause()).isEqualTo(ReplicateStatusCause.PRE_COMPUTE_DATASET_DECRYPTION_FAILED);
     }
 
@@ -270,7 +270,7 @@ class PreComputeAppTests {
         final PreComputeArgs preComputeArgs = getPreComputeArgsBuilder(HTTP_DATASET_URL).build();
         doReturn(preComputeArgs).when(preComputeApp).getPreComputeArgs();
         byte[] plainContent = FileHelper.readAllBytes(PLAIN_DATA_FILE);
-        preComputeApp.savePlainDatasetFile(plainContent);
+        preComputeApp.savePlainDatasetFile(plainContent, preComputeArgs.getPlainDatasetFilenames().get(0));
         assertThat(new File(outputDir, DATASET_FILENAME)).exists();
     }
 
@@ -281,7 +281,7 @@ class PreComputeAppTests {
                 .build();
         doReturn(preComputeArgs).when(preComputeApp).getPreComputeArgs();
         PreComputeException e = assertThrows(PreComputeException.class,
-                () -> preComputeApp.savePlainDatasetFile("data".getBytes()));
+                () -> preComputeApp.savePlainDatasetFile("data".getBytes(), preComputeArgs.getPlainDatasetFilenames().get(0)));
         assertThat(e.getExitCause()).isEqualTo(ReplicateStatusCause.PRE_COMPUTE_SAVING_PLAIN_DATASET_FAILED);
     }
 
@@ -310,10 +310,10 @@ class PreComputeAppTests {
                 .chainTaskId(CHAIN_TASK_ID)
                 .outputDir(outputDir.getAbsolutePath())
                 .isDatasetRequired(true)
-                .encryptedDatasetUrl(datasetUrl)
-                .encryptedDatasetBase64Key(FileHelper.readFile(KEY_FILE))
-                .encryptedDatasetChecksum(DATASET_CHECKSUM)
-                .plainDatasetFilename(DATASET_FILENAME)
+                .encryptedDatasetUrls(List.of(datasetUrl))
+                .encryptedDatasetBase64Keys(List.of(FileHelper.readFile(KEY_FILE)))
+                .encryptedDatasetChecksums(List.of(DATASET_CHECKSUM))
+                .plainDatasetFilenames(List.of(DATASET_FILENAME))
                 .inputFiles(List.of(INPUT_FILE_1_URL, INPUT_FILE_2_URL));
     }
 

@@ -50,10 +50,10 @@ public class PreComputeArgs {
     private String outputDir;
     // dataset
     private boolean isDatasetRequired;
-    private String encryptedDatasetUrl;
-    private String encryptedDatasetBase64Key;
-    private String encryptedDatasetChecksum;
-    private String plainDatasetFilename;
+    private List<String> encryptedDatasetUrls;
+    private List<String> encryptedDatasetBase64Keys;
+    private List<String> encryptedDatasetChecksums;
+    private List<String> plainDatasetFilenames;
     // input files
     private List<String> inputFiles;
 
@@ -62,13 +62,20 @@ public class PreComputeArgs {
                 .chainTaskId(chainTaskId)
                 .outputDir(getEnvVarOrThrow(IEXEC_PRE_COMPUTE_OUT))
                 .isDatasetRequired(Boolean.parseBoolean(getEnvVarOrThrow(IS_DATASET_REQUIRED)))
+                .encryptedDatasetUrls(new ArrayList<>())
+                .encryptedDatasetBase64Keys(new ArrayList<>())
+                .encryptedDatasetChecksums(new ArrayList<>())
+                .plainDatasetFilenames(new ArrayList<>())
                 .inputFiles(new ArrayList<>())
                 .build();
         if (args.isDatasetRequired()) {
-            args.setEncryptedDatasetUrl(getEnvVarOrThrow(IEXEC_DATASET_URL));
-            args.setEncryptedDatasetBase64Key(getEnvVarOrThrow(IEXEC_DATASET_KEY));
-            args.setEncryptedDatasetChecksum(getEnvVarOrThrow(IEXEC_DATASET_CHECKSUM));
-            args.setPlainDatasetFilename(getEnvVarOrThrow(IEXEC_DATASET_FILENAME));
+            int datasetNumber = Integer.parseInt(getEnvVarOrThrow(IEXEC_DATASET_NUMBER));
+            for (int i=1; i<= datasetNumber; i++){
+                args.getEncryptedDatasetUrls().add(getEnvVarOrThrow(IEXEC_DATASET_URL_PREFIX + i));
+                args.getEncryptedDatasetBase64Keys().add(getEnvVarOrThrow(IEXEC_DATASET_KEY_PREFIX + i));
+                args.getEncryptedDatasetChecksums().add(getEnvVarOrThrow(IEXEC_DATASET_CHECKSUM_PREFIX + i));
+                args.getPlainDatasetFilenames().add(getEnvVarOrThrow(IEXEC_DATASET_FILENAME_PREFIX + i));
+            }
         }
         int inputFilesNb = Integer.parseInt(getEnvVarOrThrow(IEXEC_INPUT_FILES_NUMBER));
         for (int i = 1; i <= inputFilesNb; i++) {
@@ -98,6 +105,19 @@ public class PreComputeArgs {
         if (envVarName.startsWith(IEXEC_INPUT_FILE_URL_PREFIX)) {
             return ReplicateStatusCause.PRE_COMPUTE_AT_LEAST_ONE_INPUT_FILE_URL_MISSING;
         }
+        if (envVarName.startsWith(IEXEC_DATASET_URL_PREFIX)) {
+            return ReplicateStatusCause.PRE_COMPUTE_DATASET_URL_MISSING;
+        }
+        if (envVarName.startsWith(IEXEC_DATASET_CHECKSUM_PREFIX)) {
+            return ReplicateStatusCause.PRE_COMPUTE_DATASET_CHECKSUM_MISSING;
+        }
+        if (envVarName.startsWith(IEXEC_DATASET_KEY_PREFIX)) {
+            return ReplicateStatusCause.PRE_COMPUTE_DATASET_KEY_MISSING;
+        }
+        if (envVarName.startsWith(IEXEC_DATASET_FILENAME_PREFIX)) {
+            return ReplicateStatusCause.PRE_COMPUTE_DATASET_FILENAME_MISSING;
+        }
+
         return null;
     }
 
